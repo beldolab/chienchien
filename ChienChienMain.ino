@@ -34,6 +34,8 @@ int MOTL_PIN_EN = 8;
 int PWM_MIN = 6;
 int PWM_MAX = 249;
 
+int dogState = 0;
+
 // --------------- VBat function ---------------------------------------------
 int sensorPin = A0;
 int sensorValue;
@@ -265,7 +267,7 @@ void setup() {
   printDisplayText(1, 0, "HUSKY OK", true);
   // Start Player
   player.begin();
-  player.setVolume(31);  // Max Volume
+  player.setVolume(30);  // Max Volume
   player.playSpecified(1);
 }
 
@@ -306,6 +308,11 @@ void loop() {
     }
     if ((x < 240) && (x > 120)) {  // Aller tout droit
       if (ISAUTO) {
+        if(dogState==0) //When there is a QRCode seen and the dog goes straight, BARK !
+        {
+          player.playSpecified(2);
+          dogState = 1;
+        }
         vright = 10;
         vleft = 10;
         speed = 25;
@@ -317,6 +324,7 @@ void loop() {
         vright = 0;
         vleft = 10;
         speed = 20;
+        dogState = 2;
       }
       Serial.println(F("A GAUCHE"));
       printDisplayText(1, 8, "A GAUCHE", true);
@@ -325,6 +333,7 @@ void loop() {
         vright = 10;
         vleft = 0;
         speed = 20;
+        dogState = 2;
       }
       printDisplayText(1, 8, "A DROITE", true);
       Serial.println(F("A DROITE"));
@@ -346,6 +355,15 @@ void loop() {
       if (speed > 25) speed = 25;
       MotorAssignSpeed(vright, vleft, speed, mabort);
     }
+  }
+  else //When there is no tag to read, reset DogState
+  {
+    if(dogState!=0)
+    {
+      Serial.print("STATE : ");
+      Serial.print(dogState);
+    }
+    dogState = 0;
   }
   // Check Bluetooth command
   if (Serial3.available() > 0) {
