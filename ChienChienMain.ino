@@ -321,7 +321,7 @@ void loop() {
       Serial.println(F("TOUT DROIT"));
     } else if (x < 120) {  // Tourner à gauche
       if (ISAUTO) {
-        vright = 0;
+        vright = map(x, 120, 0, 10, 0);
         vleft = 10;
         speed = 20;
         dogState = 2;
@@ -331,7 +331,7 @@ void loop() {
     } else if (x > 240) {
       if (ISAUTO) {
         vright = 10;
-        vleft = 0;
+        vleft = map(x, 240, 360, 10, 0);
         speed = 20;
         dogState = 2;
       }
