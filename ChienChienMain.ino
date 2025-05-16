@@ -7,7 +7,7 @@
 //        Date: 10/04/2025
 // ---------------------------------------------------------------------------
 #include <Wire.h>
-#include <LiquidCrystal_I2C.h>
+#include "LiquidCrystal_I2C.h"
 #include "HUSKYLENS.h"
 #include "DYPlayerArduino.h"
 
@@ -231,7 +231,7 @@ bool CheckCoherency(char *cl) {
 
 // ------------------------------------------------------------------
 unsigned long HUSKmili = 0;
-unsigned long MAXmili = 1000;  // no command time
+unsigned long MAXmili = 200;  // no command time
 
 unsigned int AUTOMATIC = 1;
 unsigned int MANUAL = 2;
@@ -268,7 +268,7 @@ void setup() {
   // Start Player
   player.begin();
   player.setVolume(30);  // Max Volume
-  player.playSpecified(1);
+  player.playSpecified(2);
 }
 
 // ------------------------------------------------------------------
@@ -306,54 +306,73 @@ void loop() {
       vleft = 0;
       speed = 0;
     }
-    if ((x < 240) && (x > 120)) {  // Aller tout droit
-      if (ISAUTO) {
-        if(dogState==0) //When there is a QRCode seen and the dog goes straight, BARK !
-        {
-          player.playSpecified(2);
-          dogState = 1;
+
+    // ID 1 = STOP
+    // ID 2 = FOLLOW
+    // ID 3 = BARK
+    // ID 4 = FOLLOW & BARK
+
+    if(iobj == 1)
+    {
+      //Stopmotors();
+    }
+
+    else if(iobj == 3)
+    {
+      player.playSpecified(2);
+    }
+
+    else if (iobj == 2 || iobj == 4)
+    {
+      if ((x < 240) && (x > 120)) {  // Aller tout droit
+        if (ISAUTO) {
+          if(dogState==0) //When there is a QRCode seen and the dog goes straight, BARK !
+          {
+            if(iobj == 4){ player.playSpecified(2);}
+            dogState = 1;
+          }
+          vright = 10;
+          vleft = 10;
+          speed = 25;
         }
-        vright = 10;
-        vleft = 10;
-        speed = 25;
+        printDisplayText(1, 8, "TOUT DROIT", true);
+        Serial.println(F("TOUT DROIT"));
+      } else if (x < 120) {  // Tourner à gauche
+        if (ISAUTO) {
+          vright = map(x, 120, 0, 10, 0);
+          vleft = 10;
+          speed = 25;
+          dogState = 2;
+        }
+        Serial.println(F("A GAUCHE"));
+        printDisplayText(1, 8, "A GAUCHE", true);
+      } else if (x > 240) {
+        if (ISAUTO) {
+          vright = 10;
+          vleft = map(x, 240, 360, 10, 0);
+          speed = 25;
+          dogState = 2;
+        }
+        printDisplayText(1, 8, "A DROITE", true);
+        Serial.println(F("A DROITE"));
       }
-      printDisplayText(1, 8, "TOUT DROIT", true);
-      Serial.println(F("TOUT DROIT"));
-    } else if (x < 120) {  // Tourner à gauche
+      // Manage Distance of View
+      int w = result.width;  // Taille ( augmenter vitesse / se rapprocher )
+      if ((w > 50) && (w < 180)) {
+        if (ISAUTO) speed = speed * map(w, 76, 179, 100, 0) / 100;
+        Serial.print("RALENTIS : ");
+        Serial.println(speed);
+      } else if (w >= 180) {
+        if (ISAUTO) speed = 0;
+        printDisplayText(1, 8, "STOP", true);
+        Serial.print("STOOOOOOP");
+        Serial.println(speed);
+      }
       if (ISAUTO) {
-        vright = map(x, 120, 0, 10, 0);
-        vleft = 10;
-        speed = 20;
-        dogState = 2;
+        if (speed < 0) speed = 0;
+        if (speed > 25) speed = 25;
+        MotorAssignSpeed(vright, vleft, speed, mabort);
       }
-      Serial.println(F("A GAUCHE"));
-      printDisplayText(1, 8, "A GAUCHE", true);
-    } else if (x > 240) {
-      if (ISAUTO) {
-        vright = 10;
-        vleft = map(x, 240, 360, 10, 0);
-        speed = 20;
-        dogState = 2;
-      }
-      printDisplayText(1, 8, "A DROITE", true);
-      Serial.println(F("A DROITE"));
-    }
-    // Manage Distance of View
-    int w = result.width;  // Taille ( augmenter vitesse / se rapprocher )
-    if ((w > 100) && (w < 180)) {
-      if (ISAUTO) speed = speed * map(w, 101, 179, 100, 0) / 100;
-      Serial.print("RALENTIS : ");
-      Serial.println(speed);
-    } else if (w >= 180) {
-      if (ISAUTO) speed = 0;
-      printDisplayText(1, 8, "STOP", true);
-      Serial.print("STOOOOOOP");
-      Serial.println(speed);
-    }
-    if (ISAUTO) {
-      if (speed < 0) speed = 0;
-      if (speed > 25) speed = 25;
-      MotorAssignSpeed(vright, vleft, speed, mabort);
     }
   }
   else //When there is no tag to read, reset DogState
