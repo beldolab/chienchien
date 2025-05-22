@@ -237,6 +237,8 @@ unsigned int AUTOMATIC = 1;
 unsigned int MANUAL = 2;
 unsigned int ModeChien = AUTOMATIC;
 
+bool IDs[5]; // Record the different IDs found. Array count is number of tags +1 since 0 will not be used
+
 #define ISAUTO (ModeChien == AUTOMATIC)
 #define ISMANU (ModeChien == MANUAL)
 
@@ -247,6 +249,11 @@ void setup() {
   Serial3.begin(9600);  // Default Baud Rate for HC05
   // Initialize Display
   SetBLCDisplay(true);
+  //Initialize the IDs array
+  for(int i = 0; i<5; i++){
+    IDs[i] = false;
+  }
+
   // Change PWM
   // Initialise Motor
   pinMode(MOTR_PIN_EN, OUTPUT);
@@ -287,7 +294,18 @@ void loop() {
     Serial.println(F("Nothing learned, press learn button on HUSKYLENS to learn one!"));
     printDisplayText(1, 0, "HUSKY ERR NO PATTERN", true);
   }
-  if (huskylens.available()) {
+
+  //Reset Motors
+    if (ISAUTO) {
+        vright = 0;
+        vleft = 0;
+        speed = 0;
+    }
+
+  int forceID = 0; //Force a single Tag ID to be recognized. 0 = Disabled
+
+  //For every QR Code seen...
+  while(huskylens.available()) {
     HUSKYLENSResult result = huskylens.read();
     printDisplayText(1, 0, "HUSKY: ", false);
     clearZoneDisplay(1, 7, 10);
@@ -296,60 +314,81 @@ void loop() {
     printResult(result);
     // Print object ID
     int iobj = result.ID;
+    IDs[iobj] = true;
     char st[32];
     sprintf(st, "*I%d*\n", iobj);
     Serial3.print(st);
-    // Manage Angle of View
+    // Read Tag horizontal position
     int x = result.xCenter;
-    if (ISAUTO) {
-      vright = 0;
-      vleft = 0;
-      speed = 0;
-    }
 
-    // ID 1 = STOP
+    // ID 1 = ROTATE
     // ID 2 = FOLLOW
     // ID 3 = BARK
     // ID 4 = FOLLOW & BARK
 
-    if(iobj == 1)
-    {
-      //Stopmotors();
+    //Skip calculations if the tag seen is not the one we forced
+    if(forceID != 0 && iobj != forceID) {
+      IDs[iobj] = false; 
     }
 
-    else if(iobj == 3)
+    else if(iobj == 1 && IDs[2] == false  && IDs[4] == false) //Rotate with precision only if the QR Code 2 and 4 are not visible
+    {
+        if(dogState==0){ //When there is a new QRCode GROWL !
+            player.playSpecified(3); //Growl
+            dogState = 1; //Change state from Static to Moving
+          }
+        if (x < 180) {  // Turn Left
+            if (ISAUTO) {
+                vright = map(x, 180, 0, 10, -10);
+                vleft = vright*-1;
+                speed = 10;
+                dogState = 2;
+            }
+            Serial.println(F("LEFT"));
+            printDisplayText(1, 8, "LEFT", true);
+        } 
+      else if (x >= 180) {
+        if (ISAUTO) {
+          vleft = map(x, 180, 360, 10, -10);
+          vright = vleft*-1;
+          speed = 10;
+          dogState = 2;
+        }
+        Serial.println(F("RIGHT"));
+        printDisplayText(1, 8, "RIGHT", true);
+      }
+    }
+
+    else if(iobj == 3) //Bark
     {
       player.playSpecified(2);
     }
 
-    else if (iobj == 2 || iobj == 4)
+    else if ((iobj == 2 || iobj == 4) && IDs[1] == false) // Follow (and Bark) only if 
     {
-      if ((x < 240) && (x > 120)) {  // Aller tout droit
-        if (ISAUTO) {
-          if(dogState==0) //When there is a QRCode seen and the dog goes straight, BARK !
-          {
-            if(iobj == 4){ player.playSpecified(2);}
-            dogState = 1;
+      if (ISAUTO) {
+        if(dogState==0){ //When there is a new QRCode BARK !
+            if(iobj == 4) { player.playSpecified(2);} //Bark
+            dogState = 1; //Change state from Static to Moving
           }
           vright = 10;
           vleft = 10;
           speed = 25;
         }
-        printDisplayText(1, 8, "TOUT DROIT", true);
-        Serial.println(F("TOUT DROIT"));
-      } else if (x < 120) {  // Tourner à gauche
+      if (x < 180) {  // Tourner à gauche
         if (ISAUTO) {
-          vright = map(x, 120, 0, 10, 0);
+          vright = map(x, 180, 0, 10, 0);
           vleft = 10;
           speed = 25;
           dogState = 2;
         }
         Serial.println(F("A GAUCHE"));
         printDisplayText(1, 8, "A GAUCHE", true);
-      } else if (x > 240) {
+      } 
+      else if (x >= 180) {
         if (ISAUTO) {
           vright = 10;
-          vleft = map(x, 240, 360, 10, 0);
+          vleft = map(x, 180, 360, 10, 0);
           speed = 25;
           dogState = 2;
         }
@@ -368,14 +407,16 @@ void loop() {
         Serial.print("STOOOOOOP");
         Serial.println(speed);
       }
-      if (ISAUTO) {
-        if (speed < 0) speed = 0;
+    }
+    //Set motor speed and clamp speed
+    if (ISAUTO) {
+        if (speed < -25) speed = -25;
         if (speed > 25) speed = 25;
         MotorAssignSpeed(vright, vleft, speed, mabort);
-      }
     }
   }
-  else //When there is no tag to read, reset DogState
+
+  if(IDs[0] == false && IDs[1] == false && IDs[2] == false && IDs[3] == false) //When there is no tag to read, reset DogState
   {
     if(dogState!=0)
     {
@@ -384,6 +425,12 @@ void loop() {
     }
     dogState = 0;
   }
+
+  //Reset the IDs array
+  for(int i = 0; i<5; i++){
+    IDs[i] = false;
+  }
+
   // Check Bluetooth command
   if (Serial3.available() > 0) {
     // Print message
