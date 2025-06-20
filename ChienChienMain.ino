@@ -215,6 +215,7 @@ void printResult(HUSKYLENSResult result) {
 
 // Motor speed for test
 int speed = 0;
+int recordedSpeed = 0;
 int vright = 0;
 int vleft = 0;
 bool mabort = false;
@@ -231,7 +232,8 @@ bool CheckCoherency(char *cl) {
 
 // ------------------------------------------------------------------
 unsigned long HUSKmili = 0;
-unsigned long MAXmili = 200;  // no command time
+unsigned long StartTime = 0;
+unsigned long MAXmili = 20000;  // no command time
 
 unsigned int AUTOMATIC = 1;
 unsigned int MANUAL = 2;
@@ -281,6 +283,12 @@ void setup() {
 // ------------------------------------------------------------------
 void loop() {
   // Main Loop
+  if (millis() >= HUSKmili) {
+    if (ISAUTO) {
+      speed *= 0.9;
+      MotorAssignSpeed(vright, vleft, speed, mabort);
+      }
+  }
   if (millis() >= HUSKmili + MAXmili) {
     if (ISAUTO) {
       Stopmotors();
@@ -295,12 +303,12 @@ void loop() {
     printDisplayText(1, 0, "HUSKY ERR NO PATTERN", true);
   }
 
-  //Reset Motors
+ /* //Reset Motors
     if (ISAUTO) {
         vright = 0;
         vleft = 0;
         speed = 0;
-    }
+    }*/
 
   int forceID = 0; //Force a single Tag ID to be recognized. 0 = Disabled
 
@@ -334,14 +342,14 @@ void loop() {
     else if(iobj == 1 && IDs[2] == false  && IDs[4] == false) //Rotate with precision only if the QR Code 2 and 4 are not visible
     {
         if(dogState==0){ //When there is a new QRCode GROWL !
-            player.playSpecified(3); //Growl
+            //player.playSpecified(3); //Growl
             dogState = 1; //Change state from Static to Moving
           }
         if (x < 180) {  // Turn Left
             if (ISAUTO) {
-                vright = map(x, 180, 0, 10, -10);
+                vright = map(x, 180, 0, 0, -10);
                 vleft = vright*-1;
-                speed = 10;
+                speed = 25;
                 dogState = 2;
             }
             Serial.println(F("LEFT"));
@@ -349,9 +357,9 @@ void loop() {
         } 
       else if (x >= 180) {
         if (ISAUTO) {
-          vleft = map(x, 180, 360, 10, -10);
+          vleft = map(x, 180, 360, 0, -10);
           vright = vleft*-1;
-          speed = 10;
+          speed = 25;
           dogState = 2;
         }
         Serial.println(F("RIGHT"));
